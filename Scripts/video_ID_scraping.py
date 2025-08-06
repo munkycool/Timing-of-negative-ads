@@ -1,3 +1,29 @@
+# Artemis Tack, Iowa State University
+# August 2025
+#
+# This script reads a CSV file containing from Google Political Ads Transparency, containing the Video ID, the 
+# Creative ID and Advertiser ID, and then scraped Google's ad transparency website for the video's YouTube ID,
+# it then writes the Creative ID, Advertiser ID and Video ID to a new CSV file.
+#
+#            ____                      ,
+#           /---.'.__             ____//
+#                '--.\           /.---'
+#           _______  \\         //
+#         /.------.\  \|      .'/  ______
+#        //  ___  \ \ ||/|\  //  _/_----.\__
+#       |/  /.-.\  \ \:|< >|// _/.'..\   '--'
+#          //   \'. | \'.|.'/ /_/ /  \\
+#         //     \ \_\/" ' ~\-'.-'    \\
+#        //       '-._| :H: |'-.__     \\
+#       //           (/'==='\)'-._\     ||
+#       ||                        \\    \|
+#       ||                         \\    '
+# snd   |/                          \\
+#                                    ||
+#                                    ||
+#                                    \\
+#  
+
 import asyncio
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 import time
