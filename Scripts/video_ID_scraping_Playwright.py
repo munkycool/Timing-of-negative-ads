@@ -64,7 +64,7 @@ async def create_optimized_context(browser):
 async def extract_video_id_with_page(page, cr, ar):
     """Extract video ID using Playwright page"""
     try:
-        adtransparency_url = f"https://adstransparency.google.com/advertiser/{ar}/creative/{cr}?authuser=0&region=US&topic=political"
+        adtransparency_url = f"https://adstransparency.google.com/advertiser/{ar}/creative/{cr}"
         
         await page.goto(adtransparency_url, wait_until='domcontentloaded', timeout=20000)
         
