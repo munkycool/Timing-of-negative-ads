@@ -54,48 +54,29 @@ class BrowserPool:
     
     def _create_browser(self):
         """Create a single browser instance with optimized settings"""
-        if self.browser_type == 'firefox':
-            options = FirefoxOptions()
-            options.add_argument("--headless")
-            options.add_argument("--disable-gpu")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-extensions")
-            
-            # Performance optimizations
-            options.set_preference("dom.webdriver.enabled", False)
-            options.set_preference("useAutomationExtension", False)
-            options.set_preference("general.useragent.override", 
-                                  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:143.0) Gecko/20100101 Firefox/143.0")
-            
-            # Disable images and other resources for speed
-            options.set_preference("permissions.default.image", 2)
-            options.set_preference("dom.ipc.plugins.enabled.libflashplayer.so", False)
-            options.set_preference("media.volume_scale", "0.0")
-            
-            return webdriver.Firefox(options=options)
         
-        else:  # Chrome
-            options = ChromeOptions()
-            options.add_argument("--headless")
-            options.add_argument("--disable-gpu")
-            options.add_argument("--no-sandbox")
-            options.add_argument("--disable-dev-shm-usage")
-            options.add_argument("--disable-extensions")
-            options.add_argument("--disable-images")
-            options.add_argument("--disable-javascript")
-            options.add_argument("--disable-plugins")
-            
-            # Anti-detection measures
-            options.add_argument("--disable-blink-features=AutomationControlled")
-            options.add_experimental_option("excludeSwitches", ["enable-automation"])
-            options.add_experimental_option('useAutomationExtension', False)
-            
-            options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
-            
-            driver = webdriver.Chrome(options=options)
-            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-            return driver
+        # Chrome
+        options = ChromeOptions()
+        options.add_argument("--headless")
+        options.add_argument("--disable-gpu")
+        options.add_argument("--no-sandbox")
+        options.add_argument("--disable-dev-shm-usage")
+        options.add_argument("--disable-extensions")
+        options.add_argument("--disable-images")
+        options.add_argument("--disable-javascript")
+        options.add_argument("--disable-plugins")
+        
+        # Anti-detection measures
+        options.add_argument("--disable-blink-features=AutomationControlled")
+        options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        options.add_experimental_option('useAutomationExtension', False)
+        
+        options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
+        
+        driver = webdriver.Chrome(options=options)
+        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        
+        return driver
     
     def _initialize_browsers(self):
         """Initialize the browser pool"""
@@ -273,11 +254,15 @@ def main():
     print("=== Video ID Scraping with Selenium ===")
     
     # Get input file name
-    file_output_name = input("Enter the CSV file name (without extension): ")
-    input_file = f'/Users/starlight/Documents/Accademia/Timing of negative ads/google-political-ads-transparency-bundle (1)/{file_output_name}.csv'
+    file_input_name = input("Enter the CSV file name (without extension): ")
+    input_file = f'{file_input_name}.csv'
     
+    # Get output file name
+    file_output_name = input("Enter the output CSV file name (without extension): ")
+    output_file = f'{file_output_name}.csv'
+
     # Progress tracking
-    progress_file = f'/Users/starlight/Documents/Accademia/Timing of negative ads/google-political-ads-transparency-bundle (1)/progress_{file_output_name}.json'
+    progress_file = f'{file_input_name}_progress.json'
     progress_tracker = ProgressTracker(progress_file)
     
     # Read URLs
@@ -389,7 +374,7 @@ def main():
     print(f"Average time per URL: {total_time/final_processed:.2f}s" if final_processed > 0 else "N/A")
     
     # Save results to CSV
-    output_file = f'/Users/starlight/Documents/Accademia/Timing of negative ads/google-political-ads-transparency-bundle (1)/video_ids_{file_output_name}.csv'
+    output_file = f'{file_output_name}_results.csv'
     
     try:
         with open(output_file, mode='w', encoding='utf-8', newline='') as file:
