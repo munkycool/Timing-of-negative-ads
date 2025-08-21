@@ -55,26 +55,32 @@ class BrowserPool:
     def _create_browser(self):
         """Create a single browser instance with optimized settings"""
         
-        # Chrome
-        options = ChromeOptions()
+        # Firefox
+        options = FirefoxOptions()
         options.add_argument("--headless")
-        options.add_argument("--disable-gpu")
-        options.add_argument("--no-sandbox")
-        options.add_argument("--disable-dev-shm-usage")
-        options.add_argument("--disable-extensions")
-        options.add_argument("--disable-images")
-        options.add_argument("--disable-javascript")
-        options.add_argument("--disable-plugins")
         
-        # Anti-detection measures
-        options.add_argument("--disable-blink-features=AutomationControlled")
-        options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        options.add_experimental_option('useAutomationExtension', False)
+        # Performance optimizations
+        options.set_preference("dom.webdriver.enabled", False)
+        options.set_preference("useAutomationExtension", False)
+        options.set_preference("general.useragent.override", "Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0")
         
-        options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/143.0.0.0 Safari/537.36")
+        # Disable images and JavaScript for faster loading
+        options.set_preference("permissions.default.image", 2)
+        options.set_preference("javascript.enabled", False)
         
-        driver = webdriver.Chrome(options=options)
-        driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        # Additional performance settings
+        options.set_preference("dom.ipc.plugins.enabled.libflashplayer.so", False)
+        options.set_preference("media.volume_scale", "0.0")
+        
+        # Custom Firefox binary path
+        firefox_binary_path = "/home/uly/Timing-of-negative-ads/data/firefox/firefox/firefox"
+        options.binary_location = firefox_binary_path
+        
+        # Custom geckodriver path
+        geckodriver_path = "/home/uly/Timing-of-negative-ads/data/firefox/geckodriver"
+        service = webdriver.firefox.service.Service(executable_path=geckodriver_path)
+        
+        driver = webdriver.Firefox(service=service, options=options)
         
         return driver
     
@@ -291,10 +297,8 @@ def main():
     browser_pool_size = 3  # Number of browsers in pool
     save_interval = 25  # Save progress every N URLs
     
-    # Create browser pool
-    browser_type = input("Choose browser (firefox/chrome) [default: firefox]: ").strip().lower()
-    if browser_type not in ['firefox', 'chrome']:
-        browser_type = 'firefox'
+    # Create browser pool with Firefox
+    browser_type = 'firefox'
     
     print(f"Creating browser pool with {browser_pool_size} {browser_type} browsers...")
     browser_pool = BrowserPool(browser_pool_size, browser_type)

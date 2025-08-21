@@ -3,3 +3,5 @@ Data/
 Data/
 google-political-ads-transparency-bundle*/
 Data/
+data/
+.venv/
