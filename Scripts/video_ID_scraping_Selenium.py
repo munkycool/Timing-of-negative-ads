@@ -30,6 +30,7 @@ import time
 import csv
 import os
 import json
+import random
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from queue import Queue
@@ -50,23 +51,91 @@ class BrowserPool:
         self.browser_type = browser_type
         self.browsers = Queue()
         self._lock = threading.Lock()
+        
+        # Proxy rotation setup
+        self.proxies = [
+            # Add your proxy list here - format: "ip:port" or "username:password@ip:port"
+            # Example proxies (replace with your actual proxies):
+            # "192.168.1.100:8080",
+            # "192.168.1.101:8080",
+            # "user:pass@192.168.1.102:8080",
+            # "proxy1.example.com:3128",
+            # "proxy2.example.com:3128"
+        ]
+        
+        # If no proxies provided, use direct connection
+        if not self.proxies:
+            print("⚠️  No proxies configured - using direct connection")
+            self.proxies = [None]  # None means no proxy
+        else:
+            print(f"✅ Configured {len(self.proxies)} proxies for rotation")
+        
+        self.proxy_index = 0
         self._initialize_browsers()
+    
+    def _get_next_proxy(self):
+        """Get next proxy in rotation"""
+        with self._lock:
+            proxy = self.proxies[self.proxy_index]
+            self.proxy_index = (self.proxy_index + 1) % len(self.proxies)
+            return proxy
     
     def _create_browser(self):
         """Create a single browser instance with optimized settings"""
+        
+        # Get next proxy in rotation
+        proxy = self._get_next_proxy()
+        
+        # Rotate user agents to avoid detection
+        user_agents = [
+            "Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0",
+            "Mozilla/5.0 (X11; Linux x86_64; rv:92.0) Gecko/20100101 Firefox/92.0", 
+            "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36"
+        ]
         
         # Firefox
         options = FirefoxOptions()
         options.add_argument("--headless")
         
+        # Configure proxy if available
+        if proxy:
+            print(f"🌐 Using proxy: {proxy}")
+            if "@" in proxy:
+                # Proxy with authentication: username:password@ip:port
+                auth_part, proxy_part = proxy.split("@")
+                username, password = auth_part.split(":")
+                ip, port = proxy_part.split(":")
+                
+                # Set proxy preferences for Firefox
+                options.set_preference("network.proxy.type", 1)  # Manual proxy
+                options.set_preference("network.proxy.http", ip)
+                options.set_preference("network.proxy.http_port", int(port))
+                options.set_preference("network.proxy.ssl", ip)
+                options.set_preference("network.proxy.ssl_port", int(port))
+                
+                # Authentication (requires additional setup)
+                options.set_preference("network.proxy.share_proxy_settings", True)
+                
+            else:
+                # Simple proxy: ip:port
+                ip, port = proxy.split(":")
+                options.set_preference("network.proxy.type", 1)  # Manual proxy
+                options.set_preference("network.proxy.http", ip)
+                options.set_preference("network.proxy.http_port", int(port))
+                options.set_preference("network.proxy.ssl", ip)
+                options.set_preference("network.proxy.ssl_port", int(port))
+                options.set_preference("network.proxy.share_proxy_settings", True)
+        
         # Performance optimizations
         options.set_preference("dom.webdriver.enabled", False)
         options.set_preference("useAutomationExtension", False)
-        options.set_preference("general.useragent.override", "Mozilla/5.0 (X11; Linux x86_64; rv:91.0) Gecko/20100101 Firefox/91.0")
+        options.set_preference("general.useragent.override", random.choice(user_agents))
         
-        # Disable images and JavaScript for faster loading
+        # Disable images for faster loading (but keep JavaScript enabled)
         options.set_preference("permissions.default.image", 2)
-        options.set_preference("javascript.enabled", False)
+        # options.set_preference("javascript.enabled", False)  # COMMENTED OUT - we need JS!
         
         # Additional performance settings
         options.set_preference("dom.ipc.plugins.enabled.libflashplayer.so", False)
@@ -76,11 +145,10 @@ class BrowserPool:
         firefox_binary_path = "/home/uly/Timing-of-negative-ads/data/firefox/firefox/firefox"
         options.binary_location = firefox_binary_path
         
-        # Custom geckodriver path
+        # Custom geckodriver path (for older Selenium versions)
         geckodriver_path = "/home/uly/Timing-of-negative-ads/data/firefox/geckodriver"
-        service = webdriver.firefox.service.Service(executable_path=geckodriver_path)
         
-        driver = webdriver.Firefox(service=service, options=options)
+        driver = webdriver.Firefox(executable_path=geckodriver_path, options=options)
         
         return driver
     
@@ -106,9 +174,13 @@ class BrowserPool:
         try:
             self.browsers.put_nowait(browser)
         except:
-            # If queue is full, close the browser
+            # If queue is full, properly close the browser
             try:
-                browser.quit()
+                browser.close()  # Close the current window
+            except:
+                pass
+            try:
+                browser.quit()   # Quit the driver
             except:
                 pass
     
@@ -117,9 +189,24 @@ class BrowserPool:
         while not self.browsers.empty():
             try:
                 browser = self.browsers.get_nowait()
-                browser.quit()
+                # Properly close browser windows first, then quit the driver
+                try:
+                    browser.close()  # Close the current window
+                except:
+                    pass
+                try:
+                    browser.quit()   # Quit the driver and close all windows
+                except:
+                    pass
             except:
                 pass
+    
+    def add_proxies(self, proxy_list):
+        """Add a list of proxies to the rotation"""
+        with self._lock:
+            self.proxies = proxy_list if proxy_list else [None]
+            self.proxy_index = 0
+            print(f"✅ Updated proxy list: {len(self.proxies)} proxies")
 
 def extract_video_id_with_selenium(driver, cr, ar):
     """Extract video ID using Selenium WebDriver"""
@@ -127,18 +214,48 @@ def extract_video_id_with_selenium(driver, cr, ar):
         adtransparency_url = f"https://adstransparency.google.com/advertiser/{ar}/creative/{cr}"
         
         driver.get(adtransparency_url)
-        wait = WebDriverWait(driver, 20)
+        
+        # Check for rate limiting indicators
+        page_source = driver.page_source.lower()
+        page_title = driver.title.lower()
+        
+        # Common rate limiting/blocking indicators
+        rate_limit_indicators = [
+            "rate limit",
+            "too many requests", 
+            "429",
+            "blocked",
+            "captcha",
+            "unusual traffic",
+            "suspicious activity",
+            "access denied",
+            "forbidden",
+            "503 service unavailable",
+            "502 bad gateway",
+            "cloudflare"
+        ]
+        
+        # Check if we're being rate limited
+        for indicator in rate_limit_indicators:
+            if indicator in page_source or indicator in page_title:
+                raise Exception(f"RATE LIMITED: Detected '{indicator}' on page for {cr}")
+        
+        # Check for empty or error pages
+        if len(page_source) < 1000:  # Suspiciously small page
+            raise Exception(f"SUSPICIOUS: Very small page response ({len(page_source)} chars) for {cr}")
+        
+        wait = WebDriverWait(driver, 20)  # Increased timeout
         
         # Wait for the fletch-render iframe
-        fletch_render_iframe = wait.until(
+        fletch_render_iframe = WebDriverWait(driver, 7).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, 'iframe[id^="fletch-render"]'))
         )
         
         # Switch to the fletch-render iframe
         driver.switch_to.frame(fletch_render_iframe)
         
-        # Wait for the google ad iframe with shorter timeout
-        google_ad_wait = WebDriverWait(driver, 5)
+        # Wait for the google ad iframe with reasonable timeout
+        google_ad_wait = WebDriverWait(driver, 5)  # Increased timeout
         google_ad_iframe = google_ad_wait.until(
             EC.presence_of_element_located((By.CSS_SELECTOR, 'iframe[id^="google_ad"]'))
         )
@@ -146,8 +263,8 @@ def extract_video_id_with_selenium(driver, cr, ar):
         # Switch to the google ad iframe
         driver.switch_to.frame(google_ad_iframe)
         
-        # Wait for the video iframe with shorter timeout
-        video_wait = WebDriverWait(driver, 5)
+        # Wait for the video iframe with reasonable timeout
+        video_wait = WebDriverWait(driver, 5)  # Increased timeout
         video_iframe = video_wait.until(
             EC.presence_of_element_located((By.CSS_SELECTOR, 'iframe[id^="video"]'))
         )
@@ -169,7 +286,8 @@ def extract_video_id_with_selenium(driver, cr, ar):
         return None
     except Exception as e:
         driver.switch_to.default_content()
-        return None
+        # Re-raise the exception so it can be handled properly in process_single_url
+        raise e
 
 class ProgressTracker:
     def __init__(self, progress_file):
@@ -244,12 +362,25 @@ def process_single_url(args):
             print(f"Thread {thread_id}: FAILED - {cr} ({elapsed:.2f}s)")
             result = None
         
-        # Add small delay to be respectful to the server
-        time.sleep(0.25)
+        # Add random delay to mimic human behavior and avoid detection
+        delay = random.uniform(5, 15)  # Random delay between 5-15 seconds
+        time.sleep(delay)
         return result
         
     except Exception as e:
-        print(f"Thread {thread_id}: ERROR - {cr}: {str(e)}")
+        error_msg = str(e)
+        elapsed = time.time() - start_time if 'start_time' in locals() else 0
+        
+        # Check if it's a rate limiting error and handle specially
+        if "RATE LIMITED" in error_msg:
+            print(f"Thread {thread_id}: ⚠️  RATE LIMITED - {cr}: {error_msg} ({elapsed:.2f}s)")
+            print(f"🚨 Backing off for 60 seconds due to rate limiting...")
+            time.sleep(60)  # Wait 60 seconds on rate limit
+        elif "SUSPICIOUS" in error_msg:
+            print(f"Thread {thread_id}: ⚠️  SUSPICIOUS RESPONSE - {cr}: {error_msg} ({elapsed:.2f}s)")
+        else:
+            print(f"Thread {thread_id}: ERROR - {cr}: {error_msg} ({elapsed:.2f}s)")
+        
         progress_tracker.add_result(cr, ar, None)
         return None
     finally:
@@ -292,16 +423,30 @@ def main():
     print(f"Already processed: {len(progress_tracker.processed_urls)}")
     print(f"Remaining: {len(urls_to_process) - len(progress_tracker.processed_urls)}")
     
-    # Settings for concurrent processing
-    max_workers = 5  # Number of concurrent threads
-    browser_pool_size = 3  # Number of browsers in pool
-    save_interval = 25  # Save progress every N URLs
+    # Settings for concurrent processing (reduced for rate limiting)
+    max_workers = 3       # Reduced from 10 to avoid 429 errors
+    browser_pool_size = 3 # Match workers
+    save_interval = 25    # Save progress every N URLs
     
     # Create browser pool with Firefox
     browser_type = 'firefox'
     
+    # Configure proxies (add your proxy list here)
+    proxy_list = [
+        # Add your proxies here - examples:
+        # "192.168.1.100:8080",
+        # "192.168.1.101:8080", 
+        # "username:password@proxy.example.com:3128",
+        # "proxy1.example.com:8080",
+        # "proxy2.example.com:8080"
+    ]
+    
     print(f"Creating browser pool with {browser_pool_size} {browser_type} browsers...")
     browser_pool = BrowserPool(browser_pool_size, browser_type)
+    
+    # Add proxies to the pool if provided
+    if proxy_list:
+        browser_pool.add_proxies(proxy_list)
     
     print(f"Using {max_workers} worker threads")
     print("Starting processing...")
